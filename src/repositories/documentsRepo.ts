@@ -25,5 +25,13 @@ export const documentsRepo = {
 
     update: async (id: number, data: Partial<typeof documents.$inferInsert>) => {
         return await db.update(documents).set(data).where(eq(documents.id, id)).execute();
-    }
+    },
+    getByMeetingId: async (meetingId: number) => {
+        return await db
+            .select()
+            .from(documents)
+            .where(eq(documents.meetingId, meetingId))
+            .orderBy(desc(documents.createdAt))
+            .execute();
+    },
 };

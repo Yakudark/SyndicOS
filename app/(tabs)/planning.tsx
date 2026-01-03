@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import dayjs from 'dayjs';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,9 +47,11 @@ export default function PlanningScreen() {
     setMeetings(dayMeetings as any);
   };
 
-  useEffect(() => {
-    loadMeetings();
-  }, [selectedDate, themeVariant]);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadMeetings();
+    }, [selectedDate, themeVariant])
+  );
 
   return (
     <SafeAreaView style={styles.safe}>

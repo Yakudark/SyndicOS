@@ -1,5 +1,6 @@
+import { useFocusEffect } from '@react-navigation/native';
 import dayjs from 'dayjs';
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { meetings, notes } from '../db/schema';
 import { meetingsRepo } from '../repositories/meetingsRepo';
 import { notesRepo } from '../repositories/notesRepo';
@@ -76,9 +77,11 @@ export const useDashboardStats = () => {
         });
     };
 
-    useEffect(() => {
-        refresh();
-    }, [monthlyQuotaMinutes]);
+    useFocusEffect(
+        React.useCallback(() => {
+            refresh();
+        }, [monthlyQuotaMinutes])
+    );
 
     return { ...stats, refresh };
 };
