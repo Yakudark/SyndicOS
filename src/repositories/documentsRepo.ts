@@ -21,5 +21,9 @@ export const documentsRepo = {
 
     delete: async (id: number) => {
         return await db.delete(documents).where(eq(documents.id, id)).execute();
+    },
+
+    update: async (id: number, data: Partial<typeof documents.$inferInsert>) => {
+        return await db.update(documents).set(data).where(eq(documents.id, id)).execute();
     }
 };

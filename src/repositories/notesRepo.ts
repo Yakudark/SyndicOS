@@ -17,12 +17,20 @@ export const notesRepo = {
             .execute();
     },
 
-    create: async (meetingId: number, content: string) => {
+    getAll: async () => {
+        return await db.select().from(notes).orderBy(desc(notes.createdAt)).execute();
+    },
+
+    create: async (content: string, meetingId: number | null = null) => {
         return await db.insert(notes).values({
             meetingId,
             content,
             createdAt: new Date(),
         }).execute();
+    },
+
+    update: async (id: number, content: string) => {
+        return await db.update(notes).set({ content }).where(eq(notes.id, id)).execute();
     },
 
     delete: async (id: number) => {

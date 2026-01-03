@@ -22,15 +22,14 @@ export const NeonCard: React.FC<NeonCardProps> = ({ children, style }) => {
       transition={{ type: 'timing', duration: 500 }}
       style={[styles.container, style]}
     >
-      <BlurView intensity={20} tint="dark" style={styles.blur}>
-        <LinearGradient
-          colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
-          style={styles.gradient}
-        >
-          <View style={[styles.border, { borderColor: theme.primary }]} />
-          <View style={styles.content}>{children}</View>
-        </LinearGradient>
-      </BlurView>
+      <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
+        style={styles.gradient}
+      >
+        <View style={[styles.border, { borderColor: theme.primary }]} />
+        <View style={styles.content}>{children}</View>
+      </LinearGradient>
     </MotiView>
   );
 };
@@ -42,12 +41,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     marginVertical: 8,
   },
-  blur: {
-    flex: 1,
-  },
   gradient: {
     padding: 16,
-    flex: 1,
+    width: '100%',
   },
   border: {
     ...StyleSheet.absoluteFillObject,

@@ -34,7 +34,7 @@ export default function MeetingDetailScreen() {
 
   const handleAddNote = async () => {
     if (!newNote) return;
-    await notesRepo.create(Number(id), newNote);
+    await notesRepo.create(newNote, Number(id));
     setNewNote('');
     loadData();
   };

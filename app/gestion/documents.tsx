@@ -1,15 +1,18 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CyberButton } from '../../src/components/ui/CyberButton';
 import { NeonCard } from '../../src/components/ui/NeonCard';
 import { documentsRepo } from '../../src/repositories/documentsRepo';
+import { meetingsRepo } from '../../src/repositories/meetingsRepo';
 import { useSettingsStore } from '../../src/stores/useSettingsStore';
 import { Colors, Themes } from '../../src/theme/colors';
 
@@ -27,6 +30,22 @@ export default function DocumentScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [pendingAsset, setPendingAsset] = useState<any>(null);
 
+  // Preview State
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  
+  // Import/Edit State
+  const [docName, setDocName] = useState('');
+  const [docDate, setDocDate] = useState(new Date());
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  // Link to meeting
+  const [availableMeetings, setAvailableMeetings] = useState([]);
+  const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const loadDocs = async () => {
     setLoading(true);
     let results;
@@ -43,6 +62,20 @@ export default function DocumentScreen() {
     loadDocs();
   }, [activeCategory]);
 
+  useEffect(() => {
+      loadMeetingsForDate(docDate);
+  }, [docDate]);
+
+  const loadMeetingsForDate = async (date: Date) => {
+      const allMeetings = await meetingsRepo.getAll();
+      const targetStr = dayjs(date).format('YYYY-MM-DD');
+      
+      const filtered = allMeetings.filter((m: any) => 
+          dayjs(m.startAt).format('YYYY-MM-DD') === targetStr
+      );
+      setAvailableMeetings(filtered as any);
+  };
+
   const handleImport = async () => {
     try {
         const result = await DocumentPicker.getDocumentAsync({
@@ -52,6 +85,12 @@ export default function DocumentScreen() {
 
         if (result.canceled) return;
         setPendingAsset(result.assets[0]);
+        setPendingAsset(result.assets[0]);
+        setDocName(result.assets[0].name);
+        setDocDate(new Date());
+        setSelectedMeetingId(null);
+        setIsEditing(false);
+        setEditId(null);
         setModalVisible(true);
     } catch (error) {
         console.error(error);
@@ -60,41 +99,102 @@ export default function DocumentScreen() {
   };
 
   const saveDocument = async (category: string) => {
-      if (!pendingAsset) return;
+      // Validation common to both modes
+      if (!docName.trim()) {
+        Alert.alert('Erreur', 'Le nom du document est requis');
+        return;
+      }
       setModalVisible(false);
 
-      try {
-        const fileName = pendingAsset.name;
-        const newUri = (FileSystem as any).documentDirectory + fileName;
+      if (isEditing && editId) {
+          // UPDATE MODE
+          try {
+             await documentsRepo.update(editId, {
+                 name: docName,
+                 category: category,
+                 createdAt: docDate,
+                 meetingId: selectedMeetingId
+             });
 
-        await FileSystem.copyAsync({
-            from: pendingAsset.uri,
-            to: newUri
-        });
+             loadDocs();
+             resetForm();
+             Alert.alert('Succès', 'Document modifié');
+          } catch (e) {
+              console.error(e);
+              Alert.alert('Erreur', 'Modification impossible');
+          }
+      } else {
+        // IMPORT MODE
+        if (!pendingAsset) return;
 
-        await documentsRepo.create({
-            name: fileName,
-            uri: newUri,
-            size: pendingAsset.size,
-            category: category,
-            createdAt: new Date(),
-        });
-
-        loadDocs();
-        setPendingAsset(null);
-        Alert.alert('Succès', 'Document archivé avec succès');
-      } catch (error) {
-          console.error(error);
-          Alert.alert('Erreur', "Échec de l'enregistrement");
+        try {
+            let fileName = docName.trim();
+            const originalExt = pendingAsset.name.split('.').pop();
+            
+            if (originalExt && !fileName.toLowerCase().endsWith(`.${originalExt.toLowerCase()}`)) {
+                fileName = `${fileName}.${originalExt}`;
+            }
+    
+            const newUri = (FileSystem as any).documentDirectory + fileName;
+    
+            await FileSystem.copyAsync({
+                from: pendingAsset.uri,
+                to: newUri
+            });
+    
+            await documentsRepo.create({
+                name: fileName,
+                uri: newUri,
+                size: pendingAsset.size,
+                category: category,
+                createdAt: docDate,
+                meetingId: selectedMeetingId
+            });
+    
+            loadDocs();
+            resetForm();
+            Alert.alert('Succès', 'Document archivé avec succès');
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Erreur', "Échec de l'enregistrement");
+        }
       }
   };
 
-  const handleOpen = async (uri: string) => {
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-        await Sharing.shareAsync(uri);
+  const resetForm = () => {
+      setEditId(null);
+      setIsEditing(false);
+      setDocName('');
+      setPendingAsset(null);
+      setSelectedMeetingId(null);
+  };
+
+  const handleEditInit = (doc: any) => {
+      setDocName(doc.name);
+      setEditId(doc.id);
+      setDocDate(doc.createdAt ? new Date(doc.createdAt) : new Date());
+      setSelectedMeetingId(doc.meetingId || null);
+      setIsEditing(true);
+      setPendingAsset(null); // Not needed for edit
+      setModalVisible(true);
+  };
+
+  const isImage = (filename: string) => {
+      const ext = filename.split('.').pop()?.toLowerCase();
+      return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext || '');
+  };
+
+  const handleOpen = async (doc: any) => {
+    if (isImage(doc.name)) {
+        setSelectedDoc(doc);
+        setPreviewVisible(true);
     } else {
-        Alert.alert('Info', 'Le partage n\'est pas disponible sur ce simulateur/appareil');
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+            await Sharing.shareAsync(doc.uri);
+        } else {
+            Alert.alert('Info', 'Le partage n\'est pas disponible sur ce simulateur/appareil');
+        }
     }
   };
 
@@ -175,7 +275,7 @@ export default function DocumentScreen() {
             <NeonCard style={styles.card}>
                 <TouchableOpacity 
                     style={styles.cardContent}
-                    onPress={() => handleOpen(item.uri)}
+                    onPress={() => handleOpen(item)}
                 >
                     <View style={[styles.iconBox, { borderColor: theme.secondary }]}>
                         <MaterialCommunityIcons name={getIcon(item.category) as any} size={24} color={theme.secondary} />
@@ -190,6 +290,9 @@ export default function DocumentScreen() {
                     <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
                         <MaterialCommunityIcons name="trash-can-outline" size={20} color={Colors.red} />
                     </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleEditInit(item)} style={styles.deleteBtn}>
+                        <MaterialCommunityIcons name="pencil-outline" size={20} color={theme.primary} />
+                    </TouchableOpacity>
                 </TouchableOpacity>
             </NeonCard>
         )}
@@ -203,7 +306,70 @@ export default function DocumentScreen() {
         >
             <View style={styles.modalOverlay}>
                 <View style={[styles.modalContent, { borderColor: theme.primary }]}>
-                    <Text style={[styles.modalTitle, { color: theme.primary }]}>CHOISIR CATÉGORIE</Text>
+                    <Text style={[styles.modalTitle, { color: theme.primary }]}>
+                        {isEditing ? 'MODIFIER LE DOCUMENT' : 'IMPORTER LE DOCUMENT'}
+                    </Text>
+                    
+                    <Text style={[styles.label, { color: Colors.textMuted }]}>Nom du fichier</Text>
+                    <TextInput
+                        style={[styles.input, { color: Colors.text, borderColor: 'rgba(255,255,255,0.2)' }]}
+                        value={docName}
+                        onChangeText={setDocName}
+                        placeholder="Nom du document"
+                        placeholderTextColor={Colors.textMuted}
+                    />
+
+                    <Text style={[styles.label, { color: Colors.textMuted }]}>Date du document</Text>
+                    <TouchableOpacity 
+                        style={[styles.input, { justifyContent: 'center' }]} 
+                        onPress={() => setShowDatePicker(true)}
+                    >
+                        <Text style={{ color: Colors.text, fontFamily: 'Orbitron' }}>
+                            {dayjs(docDate).format('DD MMMM YYYY').toUpperCase()}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {showDatePicker && (
+                        <DateTimePicker
+                            value={docDate}
+                            mode="date"
+                            display="default"
+                            onChange={(event, date) => {
+                                setShowDatePicker(false);
+                                if (date) {
+                                    setDocDate(date);
+                                    setSelectedMeetingId(null);
+                                }
+                            }}
+                        />
+                    )}
+
+                    <Text style={[styles.label, { color: Colors.textMuted, marginTop: 10 }]}>Lier à une réunion (Optionnel)</Text>
+                    <View style={styles.meetingList}>
+                        {availableMeetings.length > 0 ? (
+                            availableMeetings.map((m: any) => (
+                                <TouchableOpacity 
+                                    key={m.id}
+                                    style={[
+                                        styles.meetingOption, 
+                                        selectedMeetingId === m.id && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                    ]}
+                                    onPress={() => setSelectedMeetingId(selectedMeetingId === m.id ? null : m.id)}
+                                >
+                                    <Text style={[
+                                        styles.meetingOptionText,
+                                        selectedMeetingId === m.id && { color: Colors.dark }
+                                    ]}>
+                                        {dayjs(m.startAt).format('HH:mm')} - {m.title}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))
+                        ) : (
+                            <Text style={styles.noMeetingText}>Aucune réunion à cette date.</Text>
+                        )}
+                    </View>
+
+                    <Text style={[styles.label, { color: Colors.textMuted, marginTop: 10 }]}>Catégorie (Valider)</Text>
                     {IMPORT_CATEGORIES.map(cat => (
                         <TouchableOpacity 
                             key={cat} 
@@ -221,6 +387,29 @@ export default function DocumentScreen() {
                          <Text style={styles.modalCancelText}>ANNULER</Text>
                     </TouchableOpacity>
                 </View>
+            </View>
+        </Modal>
+
+        <Modal
+            visible={previewVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setPreviewVisible(false)}
+        >
+            <View style={styles.previewOverlay}>
+                <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewVisible(false)}>
+                    <MaterialCommunityIcons name="close-circle" size={40} color="#fff" />
+                </TouchableOpacity>
+                {selectedDoc && (
+                    <Image
+                        source={{ uri: selectedDoc.uri }}
+                        style={styles.previewImage}
+                        contentFit="contain"
+                    />
+                )}
+                 {selectedDoc && (
+                    <Text style={styles.previewTitle}>{selectedDoc.name}</Text>
+                )}
             </View>
         </Modal>
 
@@ -374,5 +563,62 @@ const styles = StyleSheet.create({
   modalCancelText: {
       color: Colors.red,
       fontFamily: 'Orbitron-Bold',
+  },
+  previewOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.95)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  previewImage: {
+      width: '100%',
+      height: '80%',
+  },
+  previewClose: {
+      position: 'absolute',
+      top: 50,
+      right: 20,
+      zIndex: 10,
+  },
+  previewTitle: {
+      color: '#fff',
+      fontFamily: 'Orbitron',
+      marginTop: 20,
+      fontSize: 14,
+  },
+  label: {
+      fontFamily: 'Orbitron',
+      fontSize: 12,
+      marginBottom: 6,
+  },
+  input: {
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 10,
+      fontFamily: 'Orbitron',
+      fontSize: 14,
+      marginBottom: 10,
+      backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  meetingList: {
+      maxHeight: 120,
+      marginBottom: 10,
+  },
+  meetingOption: {
+      padding: 10,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 8,
+      marginBottom: 6,
+  },
+  meetingOptionText: {
+      color: Colors.text,
+      fontFamily: 'Orbitron',
+      fontSize: 12,
+  },
+  noMeetingText: {
+      color: Colors.textMuted,
+      fontStyle: 'italic',
+      fontSize: 12,
   }
 });

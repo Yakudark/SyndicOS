@@ -59,6 +59,51 @@ export const initializeDb = async () => {
                 category TEXT NOT NULL,
                 uri TEXT NOT NULL,
                 size INTEGER,
+                created_at INTEGER,
+                meeting_id INTEGER,
+                FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+            );
+        `);
+
+        // Migration for existing tables
+        try {
+            expoDb.execSync("ALTER TABLE documents ADD COLUMN meeting_id INTEGER REFERENCES meetings(id) ON DELETE SET NULL;");
+        } catch (e) {
+            // Ignore if column exists
+        }
+
+        expoDb.execSync(`
+            CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                phone TEXT,
+                email TEXT,
+                address TEXT,
+                description TEXT
+            );
+        `);
+
+        expoDb.execSync(`
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT DEFAULT 'TODO',
+                priority TEXT DEFAULT 'MEDIUM',
+                due_date INTEGER,
+                created_at INTEGER
+            );
+        `);
+
+        expoDb.execSync(`
+            CREATE TABLE IF NOT EXISTS finances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                title TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                category TEXT,
+                date INTEGER NOT NULL,
                 created_at INTEGER
             );
         `);
