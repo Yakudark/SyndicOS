@@ -1,98 +1,199 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Orbitron_700Bold } from '@expo-google-fonts/orbitron';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import dayjs from 'dayjs';
+import { useFonts } from 'expo-font';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CyberButton } from '../../src/components/ui/CyberButton';
+import { NeonCard } from '../../src/components/ui/NeonCard';
+import { StatChip } from '../../src/components/ui/StatChip';
+import { useDashboardStats } from '../../src/hooks/useDashboardStats';
+import { useSettingsStore } from '../../src/stores/useSettingsStore';
+import { Colors, Themes } from '../../src/theme/colors';
+import { formatMinutes } from '../../src/utils/time';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function DashboardScreen() {
+  const themeVariant = useSettingsStore(state => state.themeVariant);
+  const monthlyQuotaMinutes = useSettingsStore(state => state.monthlyQuotaMinutes);
+  const theme = Themes[themeVariant];
+  const { upcomingMeetings, recentNotes, totalMinutesMonth, dailyMinutes, loading, refresh } = useDashboardStats();
+  const router = useRouter();
 
-export default function HomeScreen() {
+  const [fontsLoaded] = useFonts({
+    Orbitron: require('@expo-google-fonts/orbitron').Orbitron_400Regular,
+    'Orbitron-Bold': Orbitron_700Bold,
+  });
+
+  const remainingMinutes = Math.max(0, monthlyQuotaMinutes - totalMinutesMonth);
+  const progress = Math.min(1, totalMinutesMonth / monthlyQuotaMinutes);
+
+  const chartData = dailyMinutes.map((d: any) => ({
+    value: d.minutes,
+    label: dayjs(d.date).format('DD'),
+    frontColor: theme.primary,
+  }));
+
+  if (!fontsLoaded) return null;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView 
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={theme.primary} />}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.primary }]}>SYNDIC_OS</Text>
+          <Text style={styles.subtitle}>STATUS: ONLINE</Text>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Quota Section */}
+        <NeonCard>
+          <Text style={styles.sectionTitle}>QUOTA MENSUEL</Text>
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, { width: `${progress * 100}%`, backgroundColor: theme.primary }]} />
+            <View style={[styles.progressGlow, { width: `${progress * 100}%`, backgroundColor: theme.primary }]} />
+          </View>
+          <View style={styles.statsRow}>
+            <StatChip 
+              label="Réalisé" 
+              value={formatMinutes(totalMinutesMonth)} 
+              icon={<MaterialCommunityIcons name="clock-check-outline" size={16} color={theme.primary} />}
+            />
+            <StatChip 
+              label="Restant" 
+              value={formatMinutes(remainingMinutes)} 
+              icon={<MaterialCommunityIcons name="clock-alert-outline" size={16} color={theme.primary} />}
+            />
+          </View>
+        </NeonCard>
+
+        {/* Upcoming Meetings */}
+        <View style={styles.row}>
+           <Text style={styles.sectionTitle}>PROCHAINES RÉUNIONS</Text>
+           <CyberButton 
+            title="VERIF" 
+            variant="outline" 
+            onPress={() => router.push('/(tabs)/planning')} 
+            style={{ marginVertical: 0, paddingVertical: 4 }}
+            textStyle={{ fontSize: 10 }}
+           />
+        </View>
+        
+        {upcomingMeetings.map((m: any) => (
+          <NeonCard key={m.id} style={styles.meetingCard}>
+            <View style={styles.meetingHeader}>
+                <Text style={styles.meetingTitle}>{m.title}</Text>
+                <Text style={[styles.meetingDate, { color: theme.secondary }]}>
+                    {dayjs(m.startAt).format('DD MMM - HH:mm')}
+                </Text>
+            </View>
+          </NeonCard>
+        ))}
+
+        {/* Quick Actions */}
+        <View style={styles.actions}>
+<CyberButton
+  title="NOUVELLE RÉUNION"
+  onPress={() => router.push('/meeting/new')}
+/>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  safe: {
+    flex: 1,
+    backgroundColor: Colors.dark,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  container: {
+    padding: 16,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  header: {
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.cyan,
+    paddingLeft: 12,
+  },
+  title: {
+    fontFamily: 'Orbitron-Bold',
+    fontSize: 28,
+    letterSpacing: 4,
+  },
+  subtitle: {
+    color: Colors.textMuted,
+    fontFamily: 'Orbitron',
+    fontSize: 12,
+    letterSpacing: 2,
+  },
+  sectionTitle: {
+    color: Colors.text,
+    fontFamily: 'Orbitron-Bold',
+    fontSize: 14,
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  progressContainer: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 4,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    zIndex: 2,
+  },
+  progressGlow: {
     position: 'absolute',
+    height: '100%',
+    opacity: 0.3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    zIndex: 1,
   },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  meetingCard: {
+    padding: 12,
+    marginVertical: 4,
+  },
+  meetingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  meetingTitle: {
+    color: Colors.text,
+    fontFamily: 'Orbitron',
+    fontSize: 14,
+  },
+  meetingDate: {
+    fontFamily: 'Orbitron-Bold',
+    fontSize: 12,
+  },
+  emptyText: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginVertical: 20,
+    fontStyle: 'italic',
+  },
+  actions: {
+    marginTop: 20,
+  }
 });
